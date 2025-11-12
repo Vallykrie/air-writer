@@ -1,5 +1,4 @@
 import cv2
-import numpy as np
 from ultralytics import YOLO
 from gesture_detector import GestureDetector
 from drawing_canvas import DrawingCanvas
