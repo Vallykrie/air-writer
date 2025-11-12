@@ -5,7 +5,6 @@
 ![Python](https://img.shields.io/badge/python-3.8+-blue.svg)
 ![OpenCV](https://img.shields.io/badge/opencv-4.8.0+-green.svg)
 ![MediaPipe](https://img.shields.io/badge/mediapipe-0.10.0+-red.svg)
-![License](https://img.shields.io/badge/license-MIT-blue.svg)
 
 ## ✨ Features
 
@@ -204,25 +203,15 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 4. Push to the branch (`git push origin feature/AmazingFeature`)
 5. Open a Pull Request
 
-## 📝 License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
 ## 🙏 Acknowledgments
 
-- [MediaPipe](https://google.github.io/mediapipe/) by Google for hand tracking
+- [MediaPipe](https://ai.google.dev/edge/mediapipe/solutions/guide) by Google for hand tracking
 - [OpenCV](https://opencv.org/) for computer vision capabilities
 - Inspired by virtual whiteboard and air drawing applications
 
-## 📧 Contact
-
-Your Name - [@yourhandle](https://twitter.com/yourhandle)
-
-Project Link: [https://github.com/yourusername/air-writer](https://github.com/yourusername/air-writer)
-
 ## 🎥 Demo
 
-[Add demo GIF or video here]
+[Ongoing Project]
 
 ---
 
