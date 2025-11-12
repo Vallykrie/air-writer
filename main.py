@@ -181,67 +181,59 @@ class AirWriterMediaPipe:
         h, w = frame.shape[:2]
 
         # Main info panel (top-left)
-        panel_width = 380
-        panel_height = 200
+        panel_width = 200
+        panel_height = 95
         overlay = frame.copy()
         cv2.rectangle(overlay, (10, 10), (panel_width, panel_height), (0, 0, 0), -1)
         cv2.addWeighted(overlay, 0.75, frame, 0.25, 0, frame)
 
         # Title
-        cv2.putText(frame, "AIR WRITER",
-                    (20, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+        # cv2.putText(frame, "AIR WRITER",
+        #             (20, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
 
         # Mode indicator with color coding
-        mode_color = {
-            'idle': (200, 200, 200),
-            'drawing': (0, 255, 0),
-            'clearing': (0, 0, 255)
-        }
-        cv2.putText(frame, f"Mode: {self.current_mode.upper()}",
-                    (20, 65), cv2.FONT_HERSHEY_SIMPLEX, 0.6,
-                    mode_color.get(self.current_mode, (255, 255, 255)), 2)
+        # mode_color = {
+        #     'idle': (200, 200, 200),
+        #     'drawing': (0, 255, 0),
+        #     'clearing': (0, 0, 255)
+        # }
+        # cv2.putText(frame, f"Mode: {self.current_mode.upper()}",
+        #             (20, 65), cv2.FONT_HERSHEY_SIMPLEX, 0.6,
+        #             mode_color.get(self.current_mode, (255, 255, 255)), 2)
 
         # Color indicator
         current_color = config.COLORS[self.current_color_idx]
         color_name = config.COLOR_NAMES[self.current_color_idx]
-        cv2.circle(frame, (30, 100), 18, current_color, -1)
-        cv2.circle(frame, (30, 100), 18, (255, 255, 255), 2)
+        cv2.circle(frame, (40, 35), 18, current_color, -1)
+        cv2.circle(frame, (40, 35), 18, (255, 255, 255), 2)
         cv2.putText(frame, f"Color: {color_name}",
-                    (58, 107), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 1)
+                    (68, 42), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 1)
 
         # Brush size indicator
         brush_size = config.BRUSH_SIZES[self.current_brush_idx]
-        cv2.circle(frame, (30, 140), brush_size, current_color, -1)
-        cv2.circle(frame, (30, 140), max(brush_size, 10), (255, 255, 255), 2)
+        cv2.circle(frame, (40, 75), brush_size, current_color, -1)
+        cv2.circle(frame, (40, 75), max(brush_size, 10), (255, 255, 255), 2)
         cv2.putText(frame, f"Brush: {brush_size}px",
-                    (58, 147), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 1)
+                    (68, 82), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 1)
 
         # Undo history
-        history_count = len(self.canvas.history)
-        cv2.putText(frame, f"Undo History: {history_count}/{config.MAX_UNDO_HISTORY}",
-                    (20, 175), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
+        # history_count = len(self.canvas.history)
+        # cv2.putText(frame, f"Undo History: {history_count}/{config.MAX_UNDO_HISTORY}",
+        #             (20, 175), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
 
         # FPS counter (top-right)
-        if config.SHOW_FPS:
-            fps_text = f"FPS: {self.fps:.1f}"
-            fps_size = cv2.getTextSize(fps_text, cv2.FONT_HERSHEY_SIMPLEX, 0.7, 2)[0]
-            cv2.rectangle(frame, (w - fps_size[0] - 25, 10), (w - 10, 50), (0, 0, 0), -1)
-            cv2.putText(frame, fps_text, (w - fps_size[0] - 20, 38),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+        # if config.SHOW_FPS:
+        #     fps_text = f"FPS: {self.fps:.1f}"
+        #     fps_size = cv2.getTextSize(fps_text, cv2.FONT_HERSHEY_SIMPLEX, 0.7, 2)[0]
+        #     cv2.rectangle(frame, (w - fps_size[0] - 25, 10), (w - 10, 50), (0, 0, 0), -1)
+        #     cv2.putText(frame, fps_text, (w - fps_size[0] - 20, 38),
+        #                 cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
 
         # Gesture hints (bottom)
         if config.SHOW_GESTURE_HINTS:
             hint_y = h - 80
-            cv2.rectangle(frame, (10, hint_y - 10), (w - 10, h - 10), (0, 0, 0), -1)
-
-            cv2.putText(frame, "🤏 PINCH: Draw", (20, hint_y + 15),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
-            cv2.putText(frame, "✌️ PEACE: Clear", (w // 3, hint_y + 15),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 100, 100), 2)
-            cv2.putText(frame, "☝️ POINT: Undo", (2 * w // 3, hint_y + 15),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 255), 2)
-
-            cv2.putText(frame, f"C: Color | B: Brush | S: Save | U: Undo | Q: Quit",
+            cv2.rectangle(frame, (10, hint_y + 25), (w - 10, h - 10), (0, 0, 0), -1)
+            cv2.putText(frame, f"C: Color | B: Brush | S: Save | U: Undo | Q: Quit | PINCH: Draw | PEACE: Clear | POINT: Undo",
                         (20, hint_y + 50), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (200, 200, 200), 1)
 
         # Debug info
