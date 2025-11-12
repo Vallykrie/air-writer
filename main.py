@@ -1,284 +1,339 @@
 import cv2
-from ultralytics import YOLO
-from gesture_detector import GestureDetector
+import numpy as np
+import time
+from gesture_detector import MediaPipeGestureDetector
 from drawing_canvas import DrawingCanvas
+import config
 
 
-class AirWriter:
+class AirWriterMediaPipe:
     def __init__(self):
-        # Load YOLO11n-pose model
-        print("Loading YOLO11n-pose model...")
-        self.model = YOLO('yolo11n-pose.pt')
+        """Initialize Air Writer dengan MediaPipe"""
+        print("=" * 60)
+        print("🎨 AIR WRITER - MediaPipe Hand Tracking")
+        print("=" * 60)
 
         # Initialize gesture detector
-        self.gesture_detector = GestureDetector()
+        print("📦 Loading MediaPipe Hands...")
+        self.gesture_detector = MediaPipeGestureDetector()
+        print("✓ MediaPipe loaded successfully!")
 
         # Initialize camera
-        self.cap = cv2.VideoCapture(0)
-        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
-        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+        print(f"📹 Initializing camera {config.CAMERA_INDEX}...")
+        self.cap = cv2.VideoCapture(config.CAMERA_INDEX)
+        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, config.CAMERA_WIDTH)
+        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, config.CAMERA_HEIGHT)
+        self.cap.set(cv2.CAP_PROP_FPS, config.CAMERA_FPS)
 
         # Get actual frame size
         ret, frame = self.cap.read()
         if not ret:
-            raise Exception("Cannot access camera!")
+            raise Exception("❌ Cannot access camera!")
 
         self.frame_height, self.frame_width = frame.shape[:2]
-        print(f"Camera resolution: {self.frame_width}x{self.frame_height}")
+        print(f"✓ Camera resolution: {self.frame_width}x{self.frame_height}")
 
         # Initialize drawing canvas
         self.canvas = DrawingCanvas(self.frame_width, self.frame_height)
 
         # State variables
-        self.current_mode = "idle"  # idle, drawing, erasing
-        self.colors = [
-            (0, 255, 255),  # Cyan
-            (255, 0, 255),  # Magenta
-            (0, 255, 0),  # Green
-            (255, 255, 0),  # Yellow
-            (255, 255, 255)  # White
-        ]
-        self.current_color_idx = 0
+        self.current_mode = "idle"  # idle, drawing, clearing
+        self.current_color_idx = config.DEFAULT_COLOR_INDEX
+        self.current_brush_idx = config.DEFAULT_BRUSH_INDEX
 
-        print("Air Writer initialized successfully!")
-        print("\nControls:")
-        print("- PINCH (jempol + telunjuk): Mulai menggambar")
-        print("- OPEN HAND (5 jari terbuka): Hapus canvas")
-        print("- C: Ganti warna")
-        print("- S: Save canvas")
-        print("- Q: Quit")
+        # Gesture cooldown tracking
+        self.last_clear_time = 0
+        self.last_undo_time = 0
+
+        # FPS counter
+        self.fps = 0
+        self.frame_count = 0
+        self.fps_update_time = time.time()
+
+        # Print configuration
+        self.print_config()
+
+        print("\n" + "=" * 60)
+        print("✅ Air Writer initialized successfully!")
+        print("=" * 60)
+        self.print_controls()
+
+    def print_config(self):
+        """Print current configuration"""
+        print("\n⚙️  CURRENT CONFIGURATION:")
+        print(f"   Pinch Threshold: {config.PINCH_THRESHOLD} pixels")
+        print(f"   Peace Separation: {config.PEACE_FINGER_SEPARATION} pixels")
+        print(f"   Detection Confidence: {config.MIN_DETECTION_CONFIDENCE}")
+        print(f"   Smoothing Buffer: {config.SMOOTHING_BUFFER_SIZE} frames")
+        print(f"   Max Undo History: {config.MAX_UNDO_HISTORY} steps")
+
+    def print_controls(self):
+        """Print control instructions"""
+        print("\n" + "=" * 60)
+        print("📝 GESTURE CONTROLS:")
+        print("   🤏 PINCH (thumb + index)    : Start drawing")
+        print("   ✌️  PEACE SIGN (2 fingers)   : Clear canvas")
+        print("   ☝️  POINTING (index up)      : Undo last stroke")
+        print("\n⌨️  KEYBOARD CONTROLS:")
+        print("   C : Change color")
+        print("   B : Change brush size")
+        print("   S : Save canvas to file")
+        print("   R : Reset/Clear canvas")
+        print("   U : Undo last stroke")
+        print("   Q : Quit application")
+        print("   D : Toggle debug mode")
+        print("=" * 60 + "\n")
+
+    def update_fps(self):
+        """Update FPS counter"""
+        self.frame_count += 1
+        current_time = time.time()
+        elapsed = current_time - self.fps_update_time
+
+        if elapsed > 1.0:
+            self.fps = self.frame_count / elapsed
+            self.frame_count = 0
+            self.fps_update_time = current_time
 
     def process_frame(self, frame):
-        """Process frame dengan YOLO pose detection dan gesture recognition"""
-        # Flip frame untuk mirror effect
-        frame = cv2.flip(frame, 1)
+        """Process frame dengan gesture recognition"""
+        # Mirror effect untuk selfie mode
+        if config.MIRROR_CAMERA:
+            frame = cv2.flip(frame, 1)
 
-        # YOLO pose detection
-        results = self.model(frame, verbose=False)
+        # Detect hand landmarks
+        hand_landmarks = self.gesture_detector.detect_hand_landmarks(frame)
 
-        # Annotated frame dari YOLO
-        annotated_frame = results[0].plot()
+        if hand_landmarks is not None:
+            # Draw landmarks
+            self.gesture_detector.draw_landmarks(frame, hand_landmarks)
 
-        # Deteksi hand region dari YOLO pose keypoints
-        hand_region = self.extract_hand_region(frame, results[0])
+            # Detect and handle gestures
+            self.handle_gestures(hand_landmarks, frame.shape, frame)
 
-        if hand_region is not None:
-            hand_img, hand_bbox = hand_region
-
-            # Deteksi landmarks tangan dengan MediaPipe
-            hand_landmarks = self.gesture_detector.detect_hand_landmarks(hand_img)
-
-            if hand_landmarks is not None:
-                # Adjust landmarks ke koordinat frame asli
-                adjusted_landmarks = self.adjust_landmarks_to_frame(
-                    hand_landmarks, hand_bbox, frame.shape
-                )
-
-                # Deteksi gestures
-                self.handle_gestures(adjusted_landmarks, frame.shape)
-
-                # Draw landmarks di frame
-                self.draw_landmarks_on_frame(annotated_frame, adjusted_landmarks)
+            # Draw gesture indicators
+            self.gesture_detector.draw_gesture_indicator(frame, hand_landmarks, frame.shape)
+        else:
+            # No hand detected, stop drawing
+            if self.current_mode == "drawing":
+                self.canvas.stop_drawing()
+                self.current_mode = "idle"
 
         # Overlay canvas ke frame
-        result_frame = self.canvas.overlay_on_frame(annotated_frame, alpha=0.8)
+        result_frame = self.canvas.overlay_on_frame(frame)
 
-        # Draw UI info
+        # Draw UI
         self.draw_ui(result_frame)
 
         return result_frame
 
-    def extract_hand_region(self, frame, result):
-        """Extract hand region dari YOLO pose keypoints"""
-        if result.keypoints is None or len(result.keypoints) == 0:
-            return None
+    def handle_gestures(self, hand_landmarks, image_shape, frame):
+        """Detect gestures dan handle actions"""
+        current_time = time.time()
 
-        keypoints = result.keypoints[0].xy.cpu().numpy()[0]
-
-        # YOLO pose keypoints: 9=left_wrist, 10=right_wrist
-        # Ambil pergelangan tangan yang terdeteksi
-        wrists = []
-        if keypoints[9][0] > 0:  # left wrist
-            wrists.append((int(keypoints[9][0]), int(keypoints[9][1])))
-        if keypoints[10][0] > 0:  # right wrist
-            wrists.append((int(keypoints[10][0]), int(keypoints[10][1])))
-
-        if len(wrists) == 0:
-            return None
-
-        # Ambil wrist pertama (bisa dikembangkan untuk multi-hand)
-        wrist = wrists[0]
-
-        # Expand region untuk capture seluruh tangan
-        expand_size = 200
-        x1 = max(0, wrist[0] - expand_size)
-        y1 = max(0, wrist[1] - expand_size)
-        x2 = min(frame.shape[1], wrist[0] + expand_size)
-        y2 = min(frame.shape[0], wrist[1] + expand_size)
-
-        hand_img = frame[y1:y2, x1:x2]
-
-        if hand_img.size == 0:
-            return None
-
-        return hand_img, (x1, y1, x2, y2)
-
-    def adjust_landmarks_to_frame(self, hand_landmarks, hand_bbox, frame_shape):
-        """Adjust landmark coordinates dari hand region ke frame coordinates"""
-        x1, y1, x2, y2 = hand_bbox
-        hand_width = x2 - x1
-        hand_height = y2 - y1
-
-        adjusted_landmarks = type('obj', (object,), {
-            'landmark': []
-        })()
-
-        for lm in hand_landmarks.landmark:
-            adjusted_lm = type('obj', (object,), {})()
-            adjusted_lm.x = (lm.x * hand_width + x1) / frame_shape[1]
-            adjusted_lm.y = (lm.y * hand_height + y1) / frame_shape[0]
-            adjusted_lm.z = lm.z
-            adjusted_landmarks.landmark.append(adjusted_lm)
-
-        return adjusted_landmarks
-
-    def handle_gestures(self, hand_landmarks, image_shape):
-        """Handle gesture detection dan actions"""
-        # Deteksi pinch untuk drawing
+        # 1. PINCH DETECTION - Drawing
         is_pinching, pinch_point = self.gesture_detector.detect_pinch(
             hand_landmarks, image_shape
         )
 
         if is_pinching:
-            self.current_mode = "drawing"
+            if self.current_mode != "drawing":
+                self.current_mode = "drawing"
+                if config.VERBOSE:
+                    print("✏️  Drawing mode activated")
+
             self.canvas.draw_line(pinch_point)
         else:
-            self.canvas.stop_drawing()
+            if self.current_mode == "drawing":
+                self.canvas.stop_drawing()
+                self.current_mode = "idle"
 
-        # Deteksi open hand untuk clear canvas
-        is_open = self.gesture_detector.detect_open_hand(
-            hand_landmarks, image_shape
-        )
+        # 2. PEACE SIGN DETECTION - Clear Canvas
+        if not is_pinching:  # Only check if not pinching
+            is_peace = self.gesture_detector.detect_peace_sign(
+                hand_landmarks, image_shape
+            )
 
-        if is_open and self.current_mode != "clearing":
-            self.current_mode = "clearing"
-            self.canvas.clear_canvas()
-            print("Canvas cleared!")
-        elif not is_open and self.current_mode == "clearing":
-            self.current_mode = "idle"
+            if is_peace:
+                if current_time - self.last_clear_time > config.CLEAR_COOLDOWN:
+                    self.canvas.clear_canvas()
+                    self.last_clear_time = current_time
+                    self.current_mode = "clearing"
+                    print("✌️  Peace sign detected - Canvas cleared!")
+            else:
+                if self.current_mode == "clearing":
+                    self.current_mode = "idle"
 
-    def draw_landmarks_on_frame(self, frame, hand_landmarks):
-        """Draw hand landmarks pada frame"""
-        if hand_landmarks is None:
-            return
+        # 3. POINTING DETECTION - Undo
+        if not is_pinching:  # Only check if not pinching
+            is_pointing, point_tip = self.gesture_detector.detect_pointing(
+                hand_landmarks, image_shape
+            )
 
-        # Draw connections
-        connections = [
-            (0, 1), (1, 2), (2, 3), (3, 4),  # Thumb
-            (0, 5), (5, 6), (6, 7), (7, 8),  # Index
-            (0, 9), (9, 10), (10, 11), (11, 12),  # Middle
-            (0, 13), (13, 14), (14, 15), (15, 16),  # Ring
-            (0, 17), (17, 18), (18, 19), (19, 20),  # Pinky
-            (5, 9), (9, 13), (13, 17)  # Palm
-        ]
-
-        h, w = frame.shape[:2]
-
-        # Draw landmarks
-        for lm in hand_landmarks.landmark:
-            x, y = int(lm.x * w), int(lm.y * h)
-            cv2.circle(frame, (x, y), 3, (0, 255, 0), -1)
-
-        # Draw connections
-        for connection in connections:
-            start_idx, end_idx = connection
-            start_lm = hand_landmarks.landmark[start_idx]
-            end_lm = hand_landmarks.landmark[end_idx]
-
-            start_point = (int(start_lm.x * w), int(start_lm.y * h))
-            end_point = (int(end_lm.x * w), int(end_lm.y * h))
-
-            cv2.line(frame, start_point, end_point, (255, 0, 0), 2)
+            if is_pointing:
+                if current_time - self.last_undo_time > config.UNDO_COOLDOWN:
+                    if self.canvas.undo():
+                        self.last_undo_time = current_time
+                        print("☝️  Pointing detected - Undo performed!")
 
     def draw_ui(self, frame):
-        """Draw UI elements (status, controls, dll)"""
-        # Background untuk text
-        overlay = frame.copy()
-        cv2.rectangle(overlay, (10, 10), (400, 150), (0, 0, 0), -1)
-        cv2.addWeighted(overlay, 0.6, frame, 0.4, 0, frame)
+        """Draw UI elements"""
+        h, w = frame.shape[:2]
 
-        # Text info
+        # Main info panel (top-left)
+        panel_width = 380
+        panel_height = 200
+        overlay = frame.copy()
+        cv2.rectangle(overlay, (10, 10), (panel_width, panel_height), (0, 0, 0), -1)
+        cv2.addWeighted(overlay, 0.75, frame, 0.25, 0, frame)
+
+        # Title
+        cv2.putText(frame, "AIR WRITER",
+                    (20, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+
+        # Mode indicator with color coding
+        mode_color = {
+            'idle': (200, 200, 200),
+            'drawing': (0, 255, 0),
+            'clearing': (0, 0, 255)
+        }
         cv2.putText(frame, f"Mode: {self.current_mode.upper()}",
-                    (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+                    (20, 65), cv2.FONT_HERSHEY_SIMPLEX, 0.6,
+                    mode_color.get(self.current_mode, (255, 255, 255)), 2)
 
         # Color indicator
-        current_color = self.colors[self.current_color_idx]
-        cv2.circle(frame, (30, 75), 15, current_color, -1)
-        cv2.putText(frame, "Current Color",
-                    (55, 82), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+        current_color = config.COLORS[self.current_color_idx]
+        color_name = config.COLOR_NAMES[self.current_color_idx]
+        cv2.circle(frame, (30, 100), 18, current_color, -1)
+        cv2.circle(frame, (30, 100), 18, (255, 255, 255), 2)
+        cv2.putText(frame, f"Color: {color_name}",
+                    (58, 107), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 1)
 
-        # Controls
-        cv2.putText(frame, "C: Change Color | S: Save | Q: Quit",
-                    (20, 115), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
-        cv2.putText(frame, "Pinch to Draw | Open Hand to Clear",
-                    (20, 135), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
+        # Brush size indicator
+        brush_size = config.BRUSH_SIZES[self.current_brush_idx]
+        cv2.circle(frame, (30, 140), brush_size, current_color, -1)
+        cv2.circle(frame, (30, 140), max(brush_size, 10), (255, 255, 255), 2)
+        cv2.putText(frame, f"Brush: {brush_size}px",
+                    (58, 147), cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 1)
+
+        # Undo history
+        history_count = len(self.canvas.history)
+        cv2.putText(frame, f"Undo History: {history_count}/{config.MAX_UNDO_HISTORY}",
+                    (20, 175), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
+
+        # FPS counter (top-right)
+        if config.SHOW_FPS:
+            fps_text = f"FPS: {self.fps:.1f}"
+            fps_size = cv2.getTextSize(fps_text, cv2.FONT_HERSHEY_SIMPLEX, 0.7, 2)[0]
+            cv2.rectangle(frame, (w - fps_size[0] - 25, 10), (w - 10, 50), (0, 0, 0), -1)
+            cv2.putText(frame, fps_text, (w - fps_size[0] - 20, 38),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+
+        # Gesture hints (bottom)
+        if config.SHOW_GESTURE_HINTS:
+            hint_y = h - 80
+            cv2.rectangle(frame, (10, hint_y - 10), (w - 10, h - 10), (0, 0, 0), -1)
+
+            cv2.putText(frame, "🤏 PINCH: Draw", (20, hint_y + 15),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
+            cv2.putText(frame, "✌️ PEACE: Clear", (w // 3, hint_y + 15),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 100, 100), 2)
+            cv2.putText(frame, "☝️ POINT: Undo", (2 * w // 3, hint_y + 15),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 255), 2)
+
+            cv2.putText(frame, f"C: Color | B: Brush | S: Save | U: Undo | Q: Quit",
+                        (20, hint_y + 50), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (200, 200, 200), 1)
+
+        # Debug info
+        if config.DEBUG_MODE:
+            debug_y = 250
+            cv2.putText(frame, f"PINCH_THRESHOLD: {config.PINCH_THRESHOLD}",
+                        (20, debug_y), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 0), 1)
+            cv2.putText(frame, f"PEACE_SEPARATION: {config.PEACE_FINGER_SEPARATION}",
+                        (20, debug_y + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 0), 1)
 
     def change_color(self):
-        """Ganti warna drawing"""
-        self.current_color_idx = (self.current_color_idx + 1) % len(self.colors)
-        self.canvas.change_color(self.colors[self.current_color_idx])
-        print(f"Color changed to index {self.current_color_idx}")
+        """Cycle through colors"""
+        self.current_color_idx = (self.current_color_idx + 1) % len(config.COLORS)
+        self.canvas.change_color(config.COLORS[self.current_color_idx])
+        color_name = config.COLOR_NAMES[self.current_color_idx]
+        print(f"🎨 Color changed to: {color_name}")
+
+    def change_brush_size(self):
+        """Cycle through brush sizes"""
+        self.current_brush_idx = (self.current_brush_idx + 1) % len(config.BRUSH_SIZES)
+        self.canvas.change_thickness(config.BRUSH_SIZES[self.current_brush_idx])
+        print(f"🖌️  Brush size changed to: {config.BRUSH_SIZES[self.current_brush_idx]}px")
 
     def run(self):
-        """Main loop aplikasi"""
-        print("\nStarting Air Writer...")
-        print("Please position yourself in front of the camera.\n")
+        """Main application loop"""
+        print("\n🚀 Starting Air Writer...")
+        print("📹 Please show your hand to the camera\n")
 
         try:
             while True:
                 ret, frame = self.cap.read()
                 if not ret:
-                    print("Failed to grab frame")
+                    print("❌ Failed to grab frame")
                     break
 
                 # Process frame
                 result_frame = self.process_frame(frame)
 
+                # Update FPS
+                self.update_fps()
+
                 # Display
-                cv2.imshow('Air Writer - Interactive Board', result_frame)
+                cv2.imshow('Air Writer - MediaPipe Hand Tracking', result_frame)
 
                 # Handle keyboard input
                 key = cv2.waitKey(1) & 0xFF
 
                 if key == ord('q'):
-                    print("\nQuitting...")
+                    print("\n👋 Quitting...")
                     break
                 elif key == ord('c'):
                     self.change_color()
+                elif key == ord('b'):
+                    self.change_brush_size()
                 elif key == ord('s'):
-                    self.canvas.save_canvas()
+                    timestamp = time.strftime("%Y%m%d_%H%M%S")
+                    filename = f"air_writer_{timestamp}.png"
+                    self.canvas.save_canvas(filename)
+                elif key == ord('r'):
+                    self.canvas.clear_canvas()
+                    print("🗑️  Canvas cleared (keyboard)")
+                elif key == ord('u'):
+                    if self.canvas.undo():
+                        print("↩️  Undo performed (keyboard)")
+                elif key == ord('d'):
+                    config.DEBUG_MODE = not config.DEBUG_MODE
+                    print(f"🐛 Debug mode: {'ON' if config.DEBUG_MODE else 'OFF'}")
 
         except KeyboardInterrupt:
-            print("\nInterrupted by user")
-
+            print("\n⚠️  Interrupted by user")
+        except Exception as e:
+            print(f"\n❌ Error: {e}")
+            import traceback
+            traceback.print_exc()
         finally:
             self.cleanup()
 
     def cleanup(self):
         """Cleanup resources"""
-        print("Cleaning up...")
+        print("\n🧹 Cleaning up...")
         self.cap.release()
         self.gesture_detector.release()
         cv2.destroyAllWindows()
-        print("Done!")
+        print("✓ Done! Thank you for using Air Writer!\n")
 
 
 if __name__ == "__main__":
     try:
-        app = AirWriter()
+        app = AirWriterMediaPipe()
         app.run()
     except Exception as e:
-        print(f"Error: {e}")
+        print(f"\n❌ Fatal Error: {e}")
         import traceback
 
         traceback.print_exc()

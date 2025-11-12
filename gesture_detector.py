@@ -1,18 +1,46 @@
 import cv2
 import numpy as np
 import mediapipe as mp
+import config
 
 
-class GestureDetector:
+class MediaPipeGestureDetector:
+    """
+    Gesture detector menggunakan MediaPipe Hands
+
+    Hand landmarks (21 points):
+    0: WRIST
+    1-4: THUMB (CMC, MCP, IP, TIP)
+    5-8: INDEX (MCP, PIP, DIP, TIP)
+    9-12: MIDDLE (MCP, PIP, DIP, TIP)
+    13-16: RING (MCP, PIP, DIP, TIP)
+    17-20: PINKY (MCP, PIP, DIP, TIP)
+    """
+
     def __init__(self):
         self.mp_hands = mp.solutions.hands
         self.hands = self.mp_hands.Hands(
             static_image_mode=False,
-            max_num_hands=1,
-            min_detection_confidence=0.7,
-            min_tracking_confidence=0.5
+            max_num_hands=config.MAX_NUM_HANDS,
+            min_detection_confidence=config.MIN_DETECTION_CONFIDENCE,
+            min_tracking_confidence=config.MIN_TRACKING_CONFIDENCE
         )
         self.mp_draw = mp.solutions.drawing_utils
+
+        # Landmark indices
+        self.WRIST = 0
+        self.THUMB_TIP = 4
+        self.THUMB_IP = 3
+        self.INDEX_TIP = 8
+        self.INDEX_PIP = 6
+        self.INDEX_MCP = 5
+        self.MIDDLE_TIP = 12
+        self.MIDDLE_PIP = 10
+        self.MIDDLE_MCP = 9
+        self.RING_TIP = 16
+        self.RING_MCP = 13
+        self.PINKY_TIP = 20
+        self.PINKY_MCP = 17
 
     def detect_hand_landmarks(self, image):
         """Deteksi landmark tangan menggunakan MediaPipe"""
@@ -30,124 +58,202 @@ class GestureDetector:
 
     def calculate_distance(self, point1, point2):
         """Hitung jarak Euclidean antara 2 titik"""
+        if point1 is None or point2 is None:
+            return float('inf')
         return np.sqrt((point1[0] - point2[0]) ** 2 + (point1[1] - point2[1]) ** 2)
+
+    def is_finger_extended(self, hand_landmarks, finger_tip_idx, finger_pip_idx, image_shape):
+        """Check apakah jari terentang (tip lebih tinggi dari PIP)"""
+        tip = self.get_landmark_coords(hand_landmarks.landmark[finger_tip_idx], image_shape)
+        pip = self.get_landmark_coords(hand_landmarks.landmark[finger_pip_idx], image_shape)
+
+        # Jari extended jika tip lebih tinggi (y lebih kecil) dari pip
+        return tip[1] < pip[1] - 10  # 10px margin
 
     def detect_pinch(self, hand_landmarks, image_shape):
         """
-        Deteksi gesture pinch (jempol dan telunjuk menyatu)
-        Return: (is_pinching, pinch_point)
+        🤏 Deteksi gesture PINCH (jempol dan telunjuk menyatu)
+        Returns: (is_pinching, pinch_point)
+
+        Customize sensitivity di config.py: PINCH_THRESHOLD
         """
         if hand_landmarks is None:
             return False, None
 
-        # Index finger tip (landmark 8) dan Thumb tip (landmark 4)
-        index_tip = self.get_landmark_coords(
-            hand_landmarks.landmark[8], image_shape
-        )
+        # Get thumb tip dan index finger tip
         thumb_tip = self.get_landmark_coords(
-            hand_landmarks.landmark[4], image_shape
+            hand_landmarks.landmark[self.THUMB_TIP], image_shape
+        )
+        index_tip = self.get_landmark_coords(
+            hand_landmarks.landmark[self.INDEX_TIP], image_shape
         )
 
         # Hitung jarak
-        distance = self.calculate_distance(index_tip, thumb_tip)
+        distance = self.calculate_distance(thumb_tip, index_tip)
 
-        # Threshold untuk pinch (sesuaikan jika perlu)
-        pinch_threshold = 40
+        if config.DEBUG_MODE:
+            print(f"Pinch distance: {distance:.1f} (threshold: {config.PINCH_THRESHOLD})")
 
-        if distance < pinch_threshold:
-            # Return titik tengah antara jempol dan telunjuk
+        if distance < config.PINCH_THRESHOLD:
+            # Return titik tengah untuk drawing
             pinch_point = (
-                (index_tip[0] + thumb_tip[0]) // 2,
-                (index_tip[1] + thumb_tip[1]) // 2
+                (thumb_tip[0] + index_tip[0]) // 2,
+                (thumb_tip[1] + index_tip[1]) // 2
             )
             return True, pinch_point
 
         return False, None
 
-    def detect_open_hand(self, hand_landmarks, image_shape):
+    def detect_peace_sign(self, hand_landmarks, image_shape):
         """
-        Deteksi gesture tangan terbuka (seperti high-five)
-        Cek apakah semua jari terentang
+        ✌️ Deteksi gesture PEACE SIGN (telunjuk dan jari tengah terentang, lainnya tertekuk)
+        Returns: True if peace sign detected
+
+        Customize sensitivity di config.py: PEACE_FINGER_SEPARATION
         """
         if hand_landmarks is None:
             return False
 
-        # Landmark tips jari: thumb(4), index(8), middle(12), ring(16), pinky(20)
-        # Landmark base jari: thumb(2), index(5), middle(9), ring(13), pinky(17)
-        finger_tips = [4, 8, 12, 16, 20]
-        finger_bases = [2, 5, 9, 13, 17]
-
-        fingers_extended = 0
-
-        # Cek setiap jari (kecuali jempol)
-        for i in range(1, 5):
-            tip = self.get_landmark_coords(
-                hand_landmarks.landmark[finger_tips[i]], image_shape
-            )
-            base = self.get_landmark_coords(
-                hand_landmarks.landmark[finger_bases[i]], image_shape
-            )
-
-            # Jari terentang jika tip lebih tinggi dari base (y lebih kecil)
-            if tip[1] < base[1]:
-                fingers_extended += 1
-
-        # Jempol cek horizontal (x direction)
-        thumb_tip = self.get_landmark_coords(
-            hand_landmarks.landmark[4], image_shape
+        # Check index dan middle finger extended
+        index_extended = self.is_finger_extended(
+            hand_landmarks, self.INDEX_TIP, self.INDEX_PIP, image_shape
         )
-        thumb_base = self.get_landmark_coords(
-            hand_landmarks.landmark[2], image_shape
+        middle_extended = self.is_finger_extended(
+            hand_landmarks, self.MIDDLE_TIP, self.MIDDLE_PIP, image_shape
         )
 
-        if abs(thumb_tip[0] - thumb_base[0]) > abs(thumb_tip[1] - thumb_base[1]):
-            fingers_extended += 1
+        if not (index_extended and middle_extended):
+            return False
 
-        # Tangan terbuka jika minimal 4 jari terentang
-        return fingers_extended >= 4
+        # Check ring dan pinky NOT extended (tertekuk)
+        ring_tip = self.get_landmark_coords(
+            hand_landmarks.landmark[self.RING_TIP], image_shape
+        )
+        ring_mcp = self.get_landmark_coords(
+            hand_landmarks.landmark[self.RING_MCP], image_shape
+        )
+        pinky_tip = self.get_landmark_coords(
+            hand_landmarks.landmark[self.PINKY_TIP], image_shape
+        )
+        pinky_mcp = self.get_landmark_coords(
+            hand_landmarks.landmark[self.PINKY_MCP], image_shape
+        )
+
+        # Ring dan pinky harus tertekuk (tip tidak lebih tinggi dari mcp)
+        ring_folded = ring_tip[1] >= ring_mcp[1] - 20
+        pinky_folded = pinky_tip[1] >= pinky_mcp[1] - 20
+
+        # Check jarak antara index dan middle finger (harus terpisah)
+        index_tip = self.get_landmark_coords(
+            hand_landmarks.landmark[self.INDEX_TIP], image_shape
+        )
+        middle_tip = self.get_landmark_coords(
+            hand_landmarks.landmark[self.MIDDLE_TIP], image_shape
+        )
+
+        finger_separation = self.calculate_distance(index_tip, middle_tip)
+
+        if config.DEBUG_MODE:
+            print(f"Peace: idx={index_extended}, mid={middle_extended}, "
+                  f"ring_fold={ring_folded}, pinky_fold={pinky_folded}, "
+                  f"sep={finger_separation:.1f}")
+
+        return (index_extended and middle_extended and
+                ring_folded and pinky_folded and
+                finger_separation > config.PEACE_FINGER_SEPARATION)
 
     def detect_pointing(self, hand_landmarks, image_shape):
         """
-        Deteksi gesture pointing (hanya telunjuk terentang)
-        Return: (is_pointing, tip_point)
+        ☝️ Deteksi gesture POINTING (hanya telunjuk terentang)
+        Returns: (is_pointing, tip_point)
+
+        Customize sensitivity di config.py: FINGER_EXTENSION_RATIO
         """
         if hand_landmarks is None:
             return False, None
 
-        # Cek telunjuk terentang
+        # Get all finger tips dan bases
+        wrist = self.get_landmark_coords(hand_landmarks.landmark[self.WRIST], image_shape)
+
         index_tip = self.get_landmark_coords(
-            hand_landmarks.landmark[8], image_shape
+            hand_landmarks.landmark[self.INDEX_TIP], image_shape
         )
         index_mcp = self.get_landmark_coords(
-            hand_landmarks.landmark[5], image_shape
+            hand_landmarks.landmark[self.INDEX_MCP], image_shape
         )
 
-        # Cek jari tengah tertekuk
         middle_tip = self.get_landmark_coords(
-            hand_landmarks.landmark[12], image_shape
+            hand_landmarks.landmark[self.MIDDLE_TIP], image_shape
         )
         middle_mcp = self.get_landmark_coords(
-            hand_landmarks.landmark[9], image_shape
+            hand_landmarks.landmark[self.MIDDLE_MCP], image_shape
         )
 
-        index_extended = index_tip[1] < index_mcp[1] - 20
-        middle_folded = middle_tip[1] > middle_mcp[1]
+        ring_tip = self.get_landmark_coords(
+            hand_landmarks.landmark[self.RING_TIP], image_shape
+        )
+        ring_mcp = self.get_landmark_coords(
+            hand_landmarks.landmark[self.RING_MCP], image_shape
+        )
 
-        if index_extended and middle_folded:
+        # Check index finger extended
+        index_dist_tip = self.calculate_distance(wrist, index_tip)
+        index_dist_mcp = self.calculate_distance(wrist, index_mcp)
+        index_extended = index_dist_tip > index_dist_mcp * config.FINGER_EXTENSION_RATIO
+
+        # Check other fingers NOT extended
+        middle_dist_tip = self.calculate_distance(wrist, middle_tip)
+        middle_dist_mcp = self.calculate_distance(wrist, middle_mcp)
+        middle_folded = middle_dist_tip < middle_dist_mcp * config.FINGER_EXTENSION_RATIO
+
+        ring_dist_tip = self.calculate_distance(wrist, ring_tip)
+        ring_dist_mcp = self.calculate_distance(wrist, ring_mcp)
+        ring_folded = ring_dist_tip < ring_dist_mcp * config.FINGER_EXTENSION_RATIO
+
+        if config.DEBUG_MODE:
+            print(f"Pointing: idx_ext={index_extended}, mid_fold={middle_folded}, ring_fold={ring_folded}")
+
+        if index_extended and middle_folded and ring_folded:
             return True, index_tip
 
         return False, None
 
     def draw_landmarks(self, image, hand_landmarks):
         """Gambar landmark tangan di image"""
-        if hand_landmarks:
+        if hand_landmarks and config.SHOW_LANDMARKS:
             self.mp_draw.draw_landmarks(
                 image,
                 hand_landmarks,
                 self.mp_hands.HAND_CONNECTIONS,
-                self.mp_draw.DrawingSpec(color=(0, 255, 0), thickness=2),
+                self.mp_draw.DrawingSpec(color=(0, 255, 0), thickness=2, circle_radius=3),
                 self.mp_draw.DrawingSpec(color=(255, 0, 0), thickness=2)
             )
+
+    def draw_gesture_indicator(self, frame, hand_landmarks, image_shape):
+        """Draw visual indicators untuk detected gestures"""
+        if not config.SHOW_GESTURE_HINTS or hand_landmarks is None:
+            return
+
+        # Pinch indicator
+        is_pinching, pinch_point = self.detect_pinch(hand_landmarks, image_shape)
+        if is_pinching and pinch_point:
+            cv2.circle(frame, pinch_point, 15, (0, 255, 255), 3)
+            cv2.circle(frame, pinch_point, 5, (0, 255, 255), -1)
+            cv2.putText(frame, "PINCH", (pinch_point[0] + 20, pinch_point[1]),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 255), 2)
+
+        # Peace sign indicator
+        if self.detect_peace_sign(hand_landmarks, image_shape):
+            wrist = self.get_landmark_coords(hand_landmarks.landmark[self.WRIST], image_shape)
+            cv2.putText(frame, "PEACE - CLEAR", (wrist[0] - 50, wrist[1] - 30),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 100, 100), 2)
+
+        # Pointing indicator
+        is_pointing, point_tip = self.detect_pointing(hand_landmarks, image_shape)
+        if is_pointing and point_tip:
+            cv2.circle(frame, point_tip, 12, (255, 0, 255), 3)
+            cv2.putText(frame, "UNDO", (point_tip[0] + 20, point_tip[1]),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 255), 2)
 
     def release(self):
         """Cleanup resources"""
