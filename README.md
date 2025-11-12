@@ -1,29 +1,14 @@
-# 🎨 Air Writer: MediaPipe Hand Tracking Drawing Application
-
-Air Writer adalah aplikasi *Computer Vision* yang memungkinkan pengguna untuk menggambar di atas kanvas virtual secara *real-time* hanya dengan menggunakan gerakan tangan, yang dideteksi melalui *webcam*. Proyek ini memanfaatkan model *pose estimation* canggih dari MediaPipe untuk melacak *landmark* tangan dan mengenali *gesture* (gerakan) spesifik.
-
-Proyek ini dibangun menggunakan **Python** dan **OpenCV**.
-
-## ✨ Fitur Utama
-
-* **Real-time Hand Tracking:** Menggunakan MediaPipe untuk mendeteksi 21 *landmark* tangan dengan latensi rendah.
-* **Gesture-based Drawing:** Gerakan **Pinch (cubit)** (jempol dan telunjuk menyatu) untuk mulai menggambar.
-* **Gesture Controls:**
-    * ✌️ **Peace Sign (jari tengah & telunjuk):** Membersihkan (Clear) kanvas.
-    * ☝️ **Pointing (telunjuk terentang):** Membatalkan (Undo) goresan terakhir.
-* **Customizable Brush:** Dapat mengubah warna dan ukuran kuas melalui *keyboard* atau konfigurasi.
-* **Smooth Drawing:** Implementasi *Mean Filter* pada koordinat kursor untuk menghasilkan garis yang lebih halus.
-* **Canvas Overlay:** Menggabungkan gambar yang digambar dengan *feed* kamera menggunakan teknik *blending* dan *masking*.
-
-## 🚀 Instalasi dan Penggunaan
-
-### 1. Prasyarat
-
-Pastikan Anda telah menginstal **Python 3.7+**.
-
-### 2. Instalasi Dependencies
-
-Instal semua *library* yang diperlukan menggunakan `requirements.txt`:
-
-```bash
-pip install -r requirements.txt
+🎨 Air Writer - Menggambar di Udara dengan Gestur TanganSelamat datang di Air Writer! Ini adalah aplikasi Python yang memungkinkan Anda untuk menggambar di layar secara virtual hanya dengan menggunakan gestur tangan Anda di depan webcam. Aplikasi ini menggunakan OpenCV untuk pemrosesan gambar dan MediaPipe untuk pelacakan tangan (hand tracking) secara real-time.✨ Fitur UtamaMenggambar Real-time: Gambar langsung di layar menggunakan gerakan jari Anda.Kontrol Gestur Intuitif:Mencubit (Pinch): Gerakkan jari telunjuk dan ibu jari untuk mulai menggambar.Tanda "Peace" (✌️): Tunjukkan dua jari (telunjuk & tengah) untuk membersihkan seluruh kanvas.Menunjuk (☝️): Tunjukkan satu jari (telunjuk) untuk membatalkan (undo) goresan terakhir.Kustomisasi Kuas:Ganti warna kuas dengan mudah.Sesuaikan ketebalan kuas.Simpan Karya Anda: Simpan gambar di kanvas ke file PNG.Mode Debug: Tampilkan informasi debug seperti landmark tangan dan data gestur.🚀 InstalasiUntuk menjalankan proyek ini di komputer Anda, ikuti langkah-langkah berikut:Clone repositori ini:git clone [URL_REPO_ANDA_DI_SINI]
+cd [NAMA_FOLDER_REPO_ANDA]
+(Opsional tapi direkomendasikan) Buat virtual environment:python -m venv venv
+source venv/bin/activate  # Di Windows gunakan: venv\Scripts\activate
+Install dependensi yang diperlukan:Gunakan file requirements.txt yang telah disediakan.pip install -r requirements.txt
+🏃 Cara PenggunaanSetelah instalasi selesai, jalankan file main.py untuk memulai aplikasi:python main.py
+Aplikasi akan membuka jendela webcam Anda. Tunjukkan tangan Anda ke kamera untuk memulai.🕹️ KontrolAnda dapat mengontrol aplikasi menggunakan gestur tangan dan tombol keyboard:Kontrol GesturMencubit (Ibu Jari + Telunjuk): Mulai menggambar di kanvas.Tanda "Peace" (Telunjuk + Jari Tengah): Membersihkan seluruh kanvas.Menunjuk (Hanya Telunjuk): Melakukan "Undo" atau membatalkan goresan terakhir.Kontrol Keyboardc: Ganti warna kuas (berpindah ke warna berikutnya dalam daftar).b: Ganti ukuran kuas (berpindah ke ukuran berikutnya).s: Simpan gambar di kanvas saat ini sebagai file .png.r: Reset/Bersihkan kanvas (alternatif dari gestur "Peace").u: Undo goresan terakhir (alternatif dari gestur "Menunjuk").d: Mengaktifkan/Menonaktifkan Mode Debug.q: Keluar dari aplikasi.📂 Struktur Proyek.
+├── main.py              # File utama untuk menjalankan aplikasi Air Writer
+├── gesture_detector.py  # Kelas untuk mendeteksi gestur tangan (Pinch, Peace, Pointing)
+├── drawing_canvas.py    # Kelas untuk mengelola logika kanvas (menggambar, undo, overlay)
+├── config.py            # File konfigurasi untuk mengatur sensitivitas, warna, ukuran kuas, dll.
+├── requirements.txt     # Daftar dependensi Python
+└── README.md            # Dokumentasi proyek (file ini)
+🔧 KonfigurasiAnda dapat menyesuaikan sensitivitas gestur, warna, ukuran kuas, dan pengaturan kamera dengan mengubah nilai-nilai di dalam file config.py.
