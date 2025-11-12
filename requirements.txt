@@ -1,11 +1,15 @@
-# requirements.txt
-# Dependencies for Air Writer Project
+# Air Writer - Requirements
+# Python 3.8+ recommended
 
-# OpenCV for computer vision tasks and camera handling
-opencv-python>=4.5.0
+# Computer Vision
+opencv-python>=4.8.0
+opencv-contrib-python>=4.8.0
 
-# MediaPipe for real-time hand landmark and gesture detection (the core library)
+# Machine Learning / Hand Tracking
 mediapipe>=0.10.0
 
-# NumPy for efficient numerical operations and array handling (used extensively by OpenCV and for smoothing)
-numpy>=1.20.0
+# Scientific Computing
+numpy>=1.24.0
+
+# Optional: For better performance
+# opencv-python-headless>=4.8.0  # Use this instead of opencv-python on servers
