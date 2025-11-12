@@ -1,18 +1,11 @@
-# Air Writer Dependencies
+# requirements.txt
+# Dependencies for Air Writer Project
 
-# Core dependencies
-opencv-python>=4.8.0
+# OpenCV for computer vision tasks and camera handling
+opencv-python>=4.5.0
+
+# MediaPipe for real-time hand landmark and gesture detection (the core library)
 mediapipe>=0.10.0
-numpy>=1.24.0
 
-# Optional: GPU acceleration (untuk RTX 4060)
-# Uncomment salah satu sesuai CUDA version:
-
-# For CUDA 11.8:
-# torch>=2.0.0+cu118 --index-url https://download.pytorch.org/whl/cu118
-
-# For CUDA 12.1:
-# torch>=2.0.0+cu121 --index-url https://download.pytorch.org/whl/cu121
-
-# Jika tidak punya GPU, gunakan CPU version:
-# torch>=2.0.0
+# NumPy for efficient numerical operations and array handling (used extensively by OpenCV and for smoothing)
+numpy>=1.20.0
